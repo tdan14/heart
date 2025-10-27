@@ -1,235 +1,262 @@
+<!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        background-color: #000;
-        overflow: hidden;
-      }
-      canvas {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        display: block;
-        animation: heartBeat 1.8s ease-in-out infinite;
-        transform-origin: center;
-      }
-      @keyframes heartBeat {
-        0% {
-          transform: scale(1);
-        }
-        30% {
-          transform: scale(0.92);
-        }
-        60% {
-          transform: scale(1.05);
-        }
-        100% {
-          transform: scale(1);
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <canvas id="pinkboard"></canvas>
-    <script>
-      var settings = {
-        particles: {
-          length: 3000,
-          duration: 2.8,
-          velocity: 120,
-          effect: -0.85,
-          size: 2,
-        },
-      };
-      (function () {
-        var lastTime = 0;
-        var vendors = ["ms", "moz", "webkit", "o"];
-        for (var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
-          window.requestAnimationFrame = window[vendors[x] + "RequestAnimationFrame"];
-          window.cancelAnimationFrame =
-            window[vendors[x] + "CancelAnimationFrame"] ||
-            window[vendors[x] + "CancelRequestAnimationFrame"];
-        }
-        if (!window.requestAnimationFrame)
-          window.requestAnimationFrame = function (callback) {
-            var currTime = new Date().getTime();
-            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
-            var id = window.setTimeout(function () {
-              callback(currTime + timeToCall);
-            }, timeToCall);
-            lastTime = currTime + timeToCall;
-            return id;
-          };
-        if (!window.cancelAnimationFrame)
-          window.cancelAnimationFrame = function (id) {
-            clearTimeout(id);
-          };
-      })();
-      var Point = function (x, y) {
-        this.x = x || 0;
-        this.y = y || 0;
-      };
-      Point.prototype.clone = function () {
-        return new Point(this.x, this.y);
-      };
-      Point.prototype.length = function (length) {
-        if (length === undefined)
-          return Math.sqrt(this.x * this.x + this.y * this.y);
-        this.normalize();
-        this.x *= length;
-        this.y *= length;
-        return this;
-      };
-      Point.prototype.normalize = function () {
-        var len = this.length();
-        this.x /= len;
-        this.y /= len;
-        return this;
-      };
-      var Particle = function () {
-        this.position = new Point();
-        this.velocity = new Point();
-        this.acceleration = new Point();
-        this.age = 0;
-        this.twinkle = Math.random() * 1.5 + 0.5;
-      };
-      Particle.prototype.initialize = function (x, y, dx, dy) {
-        this.position.x = x;
-        this.position.y = y;
-        this.velocity.x = dx;
-        this.velocity.y = dy;
-        this.acceleration.x = dx * settings.particles.effect;
-        this.acceleration.y = dy * settings.particles.effect;
-        this.age = 0;
-        this.twinkle = Math.random() * 1.5 + 0.5;
-      };
-      Particle.prototype.update = function (deltaTime) {
-        this.position.x += this.velocity.x * deltaTime;
-        this.position.y += this.velocity.y * deltaTime;
-        this.velocity.x += this.acceleration.x * deltaTime;
-        this.velocity.y += this.acceleration.y * deltaTime;
-        this.age += deltaTime;
-      };
-      Particle.prototype.draw = function (context) {
-        function ease(t) {
-          return --t * t * t + 1;
-        }
-        var progress = this.age / settings.particles.duration;
-        var size = settings.particles.size * ease(progress);
-        var alpha = (1 - progress) * this.twinkle * (0.6 + Math.random() * 0.4);
-        var hue = 340 + Math.random() * 40;
-        var gradient = context.createRadialGradient(
-          this.position.x,
-          this.position.y,
-          0,
-          this.position.x,
-          this.position.y,
-          size * 2
-        );
-        gradient.addColorStop(0, `hsla(${hue},100%,70%,${alpha})`);
-        gradient.addColorStop(0.4, `hsla(${hue},100%,50%,${alpha})`);
-        gradient.addColorStop(1, "rgba(255,255,255,0)");
-        context.beginPath();
-        context.fillStyle = gradient;
-        context.arc(this.position.x, this.position.y, size * 1.5, 0, Math.PI * 2, false);
-        context.fill();
-        if (Math.random() < 0.2) {
-          context.beginPath();
-          context.moveTo(this.position.x - size, this.position.y);
-          context.lineTo(this.position.x + size, this.position.y);
-          context.moveTo(this.position.x, this.position.y - size);
-          context.lineTo(this.position.x, this.position.y + size);
-          context.strokeStyle = `hsla(${hue},100%,85%,${alpha * 0.8})`;
-          context.lineWidth = 0.8;
-          context.stroke();
-        }
-      };
-      var ParticlePool = function (length) {
-        var particles = new Array(length);
-        for (var i = 0; i < length; i++) particles[i] = new Particle();
-        var firstActive = 0,
-          firstFree = 0,
-          duration = settings.particles.duration;
-        this.add = function (x, y, dx, dy) {
-          particles[firstFree].initialize(x, y, dx, dy);
-          firstFree++;
-          if (firstFree == length) firstFree = 0;
-          if (firstActive == firstFree) {
-            firstActive++;
-            if (firstActive == length) firstActive = 0;
-          }
-        };
-        this.update = function (deltaTime) {
-          if (firstActive < firstFree) {
-            for (var i = firstActive; i < firstFree; i++) particles[i].update(deltaTime);
-          } else if (firstFree < firstActive) {
-            for (var i = firstActive; i < length; i++) particles[i].update(deltaTime);
-            for (var i = 0; i < firstFree; i++) particles[i].update(deltaTime);
-          }
-          while (particles[firstActive].age >= duration && firstActive != firstFree) {
-            firstActive++;
-            if (firstActive == length) firstActive = 0;
-          }
-        };
-        this.draw = function (context) {
-          if (firstActive < firstFree) {
-            for (var i = firstActive; i < firstFree; i++) particles[i].draw(context);
-          } else if (firstFree < firstActive) {
-            for (var i = firstActive; i < length; i++) particles[i].draw(context);
-            for (var i = 0; i < firstFree; i++) particles[i].draw(context);
-          }
-        };
-      };
-      (function (canvas) {
-        var context = canvas.getContext("2d"),
-          particles = new ParticlePool(settings.particles.length),
-          particleRate = settings.particles.length / settings.particles.duration,
-          time;
-        function pointOnHeart(t) {
-          return new Point(
-            160 * Math.pow(Math.sin(t), 3),
-            130 * Math.cos(t) -
-              50 * Math.cos(2 * t) -
-              20 * Math.cos(3 * t) -
-              10 * Math.cos(4 * t) +
-              25
-          );
-        }
-        function render() {
-          requestAnimationFrame(render);
-          var newTime = new Date().getTime() / 1000,
-            deltaTime = newTime - (time || newTime);
-          time = newTime;
-          context.clearRect(0, 0, canvas.width, canvas.height);
-          var amount = particleRate * deltaTime;
-          for (var i = 0; i < amount; i++) {
-            var pos = pointOnHeart(Math.PI - 2 * Math.PI * Math.random());
-            if (Math.abs(pos.x) < 15 && Math.random() < 0.8) continue;
-            var dir = pos.clone().length(settings.particles.velocity);
-            particles.add(
-              canvas.width / 2 + pos.x,
-              canvas.height / 2 - pos.y,
-              dir.x,
-              -dir.y
-            );
-          }
-          particles.update(deltaTime);
-          particles.draw(context);
-        }
-        function onResize() {
-          canvas.width = canvas.clientWidth;
-          canvas.height = canvas.clientHeight;
-        }
-        window.onresize = onResize;
-        setTimeout(function () {
-          onResize();
-          render();
-        }, 10);
-      })(document.getElementById("pinkboard"));
-    </script>
-  </body>
+<head>
+<meta charset="utf-8" />
+<title>...</title>
+<style>
+html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<script type="module">
+import * as THREE from "https://cdn.skypack.dev/three@0.136.0";
+import { OrbitControls } from "https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x160016);
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, 50, 200);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.minDistance = 30;
+controls.maxDistance = 400;
+window.addEventListener('resize', () => {
+camera.aspect = innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth, innerHeight);
+});
+
+function createCircleTexture() {
+const size = 64;
+const canvas = document.createElement('canvas');
+canvas.width = size;
+canvas.height = size;
+const ctx = canvas.getContext('2d');
+const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+gradient.addColorStop(0, 'rgba(255,255,255,1)');
+gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+gradient.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+gradient.addColorStop(1, 'rgba(255,255,255,0)');
+ctx.fillStyle = gradient;
+ctx.fillRect(0,0,size,size);
+return new THREE.CanvasTexture(canvas);
+}
+const pointTexture = createCircleTexture();
+
+let gu = { time:{value:0} };
+let sizes = [];
+let shift = [];
+let pushShift = () => {
+shift.push(Math.random()*Math.PI, Math.random()*Math.PI*2, (Math.random()*0.9+0.1)*Math.PI*0.1, Math.random()*0.9+0.1);
+};
+let pts = new Array(80000).fill().map(p=>{
+sizes.push(Math.random()*1.5+0.5);
+pushShift();
+return new THREE.Vector3().randomDirection().multiplyScalar(Math.random()*2+40);
+});
+for(let i=0;i<100000;i++){
+let r=42,R=100;
+let rand=Math.pow(Math.random(),1.5);
+let radius=Math.sqrt(R*R*rand + (1-rand)*r*r);
+let height=Math.max(0.1, (1 - (radius - r)/(R - r)) * 6); 
+pts.push(new THREE.Vector3().setFromCylindricalCoords(radius, Math.random()*2*Math.PI, (Math.random()-0.5)*height));
+sizes.push(Math.random()*1.5+0.1);
+pushShift();
+}
+
+let colors = [];
+for(let i=0;i<pts.length;i++){
+const d = pts[i].length()/120;
+const col = new THREE.Color();
+col.lerpColors(new THREE.Color(0xe39b00), new THREE.Color(0x6432ff), d);
+colors.push(col.r, col.g, col.b);
+}
+
+let g = new THREE.BufferGeometry().setFromPoints(pts);
+g.setAttribute("sizes", new THREE.Float32BufferAttribute(sizes,1));
+g.setAttribute("shift", new THREE.Float32BufferAttribute(shift,4));
+g.setAttribute("color", new THREE.Float32BufferAttribute(colors,3));
+
+let m = new THREE.PointsMaterial({
+size:0.5,
+map: pointTexture,
+vertexColors:true,
+transparent:true,
+blending: THREE.AdditiveBlending,
+depthWrite:false
+});
+
+const universePoints = new THREE.Points(g,m);
+scene.add(universePoints);
+
+const whiteParticleCount = 2000;
+const whitePositions = new Float32Array(whiteParticleCount*3);
+for(let i=0;i<whiteParticleCount;i++){
+whitePositions[3*i] = (Math.random()-0.5)*800;
+whitePositions[3*i+1] = (Math.random()-0.5)*800;
+whitePositions[3*i+2] = (Math.random()-0.5)*800;
+}
+const whiteGeometry = new THREE.BufferGeometry();
+whiteGeometry.setAttribute('position', new THREE.BufferAttribute(whitePositions,3));
+const whiteMaterial = new THREE.PointsMaterial({
+size:0.5,
+color:0xffffff,
+transparent:true,
+blending:THREE.AdditiveBlending,
+depthWrite:false
+});
+const whitePoints = new THREE.Points(whiteGeometry, whiteMaterial);
+scene.add(whitePoints);
+
+const isDevice = (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test((navigator.userAgent||navigator.vendor||window.opera).toLowerCase()));
+const koef = isDevice ? 0.5 : 1;
+const traceCount = isDevice ? 80 : 100;
+const dr = isDevice ? 0.3 : 0.1;
+function heartPosition(rad){
+const x = Math.pow(Math.sin(rad),3) * 1.3;
+const y = 15*Math.cos(rad)-5*Math.cos(2*rad)-2*Math.cos(3*rad)-Math.cos(4*rad);
+return [x,y];
+}
+const pointsOrigin = [];
+const layers=40;
+for(let i=0;i<Math.PI*2;i+=dr){
+const [x2d,y2d]=heartPosition(i);
+for(let j=0;j<layers;j++){
+const t = j/(layers-1);
+const radiusScale = Math.sin(Math.PI * t);
+const gaussian = Math.exp(-Math.pow(radiusScale-0.5,2)/0.08);
+const prob = 0.3 + 0.7 * gaussian;
+if(Math.random() > prob) continue;
+const angleY = t * Math.PI;
+const z = x2d * 150 * Math.cos(angleY) * radiusScale;
+const x = x2d * 150 * Math.sin(angleY) * radiusScale;
+const y = y2d * 9 * radiusScale;
+pointsOrigin.push(new THREE.Vector3(x,y,z));
+}
+}
+
+const heartPointsCount = pointsOrigin.length;
+const targetPoints = Array.from({length:heartPointsCount},()=>new THREE.Vector3());
+const particleCount = heartPointsCount;
+const e = new Array(particleCount);
+const rand = Math.random;
+const W = innerWidth*koef;
+const H = innerHeight*koef;
+for(let i=0;i<particleCount;i++){
+const x = rand()*W-W/2;
+const y = rand()*H-H/2;
+const z = (rand()-0.5)*600;
+e[i] = {vx:0,vy:0,vz:0,speed:rand()+5,q:~~(rand()*heartPointsCount),D:2*(i%2)-1,force:0.2*rand()+0.7,trace:Array.from({length:traceCount},()=>({x,y,z}))};
+}
+
+const totalTracePoints = particleCount*traceCount;
+const positions = new Float32Array(totalTracePoints*3);
+const colorsTrace = new Float32Array(totalTracePoints*3);
+const sizesArr = new Float32Array(totalTracePoints);
+const colorStart = new THREE.Color(0xffa500);
+const colorMiddle = new THREE.Color(0xff69b4);
+const colorEnd = new THREE.Color(0xff0000);
+
+for(let i=0;i<particleCount;i++){
+const tRatio = i/particleCount;
+const col = new THREE.Color();
+if(tRatio < 0.5){
+col.lerpColors(colorStart, colorMiddle, tRatio*2);
+} else {
+col.lerpColors(colorMiddle, colorEnd, (tRatio-0.5)*2);
+}
+for(let tIdx=0;tIdx<traceCount;tIdx++){
+const idx=i*traceCount+tIdx;
+const {x,y,z}=e[i].trace[tIdx];
+positions[3*idx]=x; positions[3*idx+1]=y; positions[3*idx+2]=z;
+colorsTrace[3*idx]=col.r; colorsTrace[3*idx+1]=col.g; colorsTrace[3*idx+2]=col.b;
+sizesArr[idx] = Math.random()*0.3+0.1;
+}
+}
+
+const traceGeometry = new THREE.BufferGeometry();
+traceGeometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+traceGeometry.setAttribute('color', new THREE.BufferAttribute(colorsTrace,3));
+traceGeometry.setAttribute('size', new THREE.BufferAttribute(sizesArr,1));
+const traceMaterial = new THREE.PointsMaterial({
+size:0.3,
+map: pointTexture,
+vertexColors:true,
+transparent:true,
+blending:THREE.AdditiveBlending,
+depthWrite:false
+});
+const tracePoints = new THREE.Points(traceGeometry, traceMaterial);
+scene.add(tracePoints);
+
+function pulse(k){
+for(let i=0;i<pointsOrigin.length;i++){
+const src=pointsOrigin[i];
+targetPoints[i].x = src.x*k;
+targetPoints[i].y = src.y*k;
+targetPoints[i].z = src.z*k;
+}
+}
+
+const clock = new THREE.Clock();
+const config={traceK:0.4,timeDelta:0.01};
+
+renderer.setAnimationLoop(()=>{
+controls.update();
+let t = clock.getElapsedTime()*0.5;
+universePoints.rotation.y = t*0.05;
+pulse(0.25);
+
+const posAttr = traceGeometry.attributes.position.array;
+for(let i=e.length-1;i>=0;i--){
+const u=e[i];
+const q=targetPoints[u.q];
+let head=u.trace[0];
+let dx=head.x-q.x, dy=head.y-q.y, dz=head.z-q.z;
+let length=Math.sqrt(dx*dx+dy*dy+dz*dz);
+if(length===0) length=0.0001;
+if(10>length){
+if(0.95<rand()) u.q=~~(rand()*heartPointsCount);
+else { if(0.99<rand()) u.D*=-1; u.q+=u.D; u.q%=heartPointsCount; if(u.q<0) u.q+=heartPointsCount;}
+}
+u.vx += -dx/length*u.speed; u.vy += -dy/length*u.speed; u.vz += -dz/length*u.speed;
+head.x+=u.vx; head.y+=u.vy; head.z+=u.vz;
+u.vx*=u.force; u.vy*=u.force; u.vz*=u.force;
+for(let k=0;k<u.trace.length-1;){
+let T=u.trace[k],N=u.trace[++k];
+N.x -= config.traceK*(N.x-T.x);
+N.y -= config.traceK*(N.y-T.y);
+N.z -= config.traceK*(N.z-T.z);
+}
+const baseIndex=i*traceCount;
+for(let t=0;t<traceCount;t++){
+const node=u.trace[t];
+const idx=baseIndex+t;
+posAttr[3*idx]=node.x; posAttr[3*idx+1]=node.y; posAttr[3*idx+2]=node.z;
+sizesArr[idx] = 0.2 + Math.random()*0.2;
+}
+}
+traceGeometry.attributes.position.needsUpdate=true;
+traceGeometry.attributes.size.needsUpdate=true;
+
+const whitePos = whiteGeometry.attributes.position.array;
+for(let i=0;i<whiteParticleCount;i++){
+whitePos[3*i+0] += (Math.random()-0.5)*0.3;
+whitePos[3*i+1] += (Math.random()-0.5)*0.3;
+whitePos[3*i+2] += (Math.random()-0.5)*0.3;
+for(let j=0;j<3;j++){
+if(Math.abs(whitePos[3*i+j])>400) whitePos[3*i+j]*=-1;
+}
+}
+whiteGeometry.attributes.position.needsUpdate = true;
+
+renderer.render(scene,camera);
+});
+</script>
+</body>
 </html>
